@@ -6,21 +6,23 @@
  * Stability  : Experimental
  */
 
-import HashMap "mo:base/HashMap";
-import Principal "mo:base/Principal";
-import Types "./types";
-import Time "mo:base/Time";
-import Iter "mo:base/Iter";
 import Array "mo:base/Array";
-import Option "mo:base/Option";
-import Order "mo:base/Order";
+import ExperimentalCycles "mo:base/ExperimentalCycles";
+import HashMap "mo:base/HashMap";
+import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
+import Option "mo:base/Option";
+import Order "mo:base/Order";
+import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
-import ExperimentalCycles "mo:base/ExperimentalCycles";
+import Time "mo:base/Time";
+
 import Cap "./cap/Cap";
 import Root "./cap/Root";
+import Types "./types";
+import Utils "./cap/Utils";
 
 shared(msg) actor class Token(
     _logo: Text,
@@ -235,6 +237,12 @@ shared(msg) actor class Token(
         );
         txcounter += 1;
         return #Ok(txcounter - 1);
+    };
+
+    public shared(msg) func getTokens(): async Types.Result_1 {
+        let caller = Utils.accountToText(Utils.principalToAccount(msg.caller));
+        let nft_canister = actor("4mupc-myaaa-aaaah-qcz2a-cai"): actor {tokens : shared query Types.AccountIdentifier -> async Types.Result_1;};
+        return await nft_canister.tokens(caller);
     };
 
     public shared(msg) func mint(to: Principal, value: Nat): async TxReceipt {
