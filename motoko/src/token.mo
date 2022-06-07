@@ -11,7 +11,9 @@ import ExperimentalCycles "mo:base/ExperimentalCycles";
 import HashMap "mo:base/HashMap";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
+import Nat32 "mo:base/Nat32";
 import Nat64 "mo:base/Nat64";
+import Hash "mo:base/Hash";
 import Option "mo:base/Option";
 import Order "mo:base/Order";
 import Principal "mo:base/Principal";
@@ -72,6 +74,12 @@ shared(msg) actor class Token(
     private stable var fee : Nat = _fee;
     private stable var balanceEntries : [(Principal, Nat)] = [];
     private stable var allowanceEntries : [(Principal, [(Principal, Nat)])] = [];
+    private stable var canClaimEntries : [var Int] = Array.init<Int>(5000, Time.now());
+    private var specials_nft = HashMap.fromIter<Nat, Nat>(Iter.fromArray(
+        [(3757,1),(54,1),(497,1),(782,1),(1383,1),(1797,1),(2198,1),(2224,1),(2258,1),(2259,1),
+(2343,1),(2362,1),(2608,1),(2722,1),(2941,1),(3038,1),(3200,1),(3214,1),(3234,1),(3527,1),(3557,1),
+(3620,1),(3941,1)]),
+        25, Nat.equal, Hash.hash);
     private var balances = HashMap.HashMap<Principal, Nat>(1, Principal.equal, Principal.hash);
     private var allowances = HashMap.HashMap<Principal, HashMap.HashMap<Principal, Nat>>(1, Principal.equal, Principal.hash);
     balances.put(owner_, totalSupply_);
@@ -239,10 +247,30 @@ shared(msg) actor class Token(
         return #Ok(txcounter - 1);
     };
 
-    public shared(msg) func getTokens(): async Types.Result_1 {
+    public shared(msg) func getTokens(): async Nat {
         let caller = Utils.accountToText(Utils.principalToAccount(msg.caller));
         let nft_canister = actor("4mupc-myaaa-aaaah-qcz2a-cai"): actor {tokens : shared query Types.AccountIdentifier -> async Types.Result_1;};
-        return await nft_canister.tokens(caller);
+        let tokens_owned = await nft_canister.tokens(caller);
+        switch(tokens_owned) {
+            case (#ok(tokenlist)) {
+                var tokens_to_add = 0;
+                for (x in tokenlist.vals()) {
+                    let how_much = specials_nft.get(Nat32.toNat(x));
+                    switch(how_much) {
+                        case(?v) {
+                            tokens_to_add += 50;
+                        };
+                        case(_) {
+                            tokens_to_add += 10;
+                        };
+                    }
+                    
+                };
+                return tokens_to_add;
+                };
+
+            case (#err(msg)) { return 0; };
+        };
     };
 
     public shared(msg) func mint(to: Principal, value: Nat): async TxReceipt {
@@ -453,3 +481,4 @@ shared(msg) actor class Token(
         allowanceEntries := [];
     };
 };
+ 
