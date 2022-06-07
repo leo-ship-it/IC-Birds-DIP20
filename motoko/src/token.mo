@@ -80,6 +80,7 @@ shared(msg) actor class Token(
 (2343,1),(2362,1),(2608,1),(2722,1),(2941,1),(3038,1),(3200,1),(3214,1),(3234,1),(3527,1),(3557,1),
 (3620,1),(3941,1)]),
         25, Nat.equal, Hash.hash);
+    private stable let claimTime: Int = 1440;
     private var balances = HashMap.HashMap<Principal, Nat>(1, Principal.equal, Principal.hash);
     private var allowances = HashMap.HashMap<Principal, HashMap.HashMap<Principal, Nat>>(1, Principal.equal, Principal.hash);
     balances.put(owner_, totalSupply_);
@@ -247,7 +248,11 @@ shared(msg) actor class Token(
         return #Ok(txcounter - 1);
     };
 
-    public shared(msg) func getTokens(): async Nat {
+    // public shared(msg) func getCurrentTime(): async Int {
+    //     return Time.now();
+    // };
+
+    public shared(msg) func getTokens(): async Int {
         let caller = Utils.accountToText(Utils.principalToAccount(msg.caller));
         let nft_canister = actor("4mupc-myaaa-aaaah-qcz2a-cai"): actor {tokens : shared query Types.AccountIdentifier -> async Types.Result_1;};
         let tokens_owned = await nft_canister.tokens(caller);
@@ -255,17 +260,35 @@ shared(msg) actor class Token(
             case (#ok(tokenlist)) {
                 var tokens_to_add = 0;
                 for (x in tokenlist.vals()) {
-                    let how_much = specials_nft.get(Nat32.toNat(x));
-                    switch(how_much) {
-                        case(?v) {
-                            tokens_to_add += 50;
+                    let last_claim = canClaimEntries[Nat32.toNat(x)];
+                    let now = Time.now();
+                    let difference = now - last_claim;
+                    var minutes = ((difference / 1000000000) / 60);
+                    if(minutes >= claimTime) {
+                        let how_much = specials_nft.get(Nat32.toNat(x));
+                        switch(how_much) {
+                            case(?v) {
+                                tokens_to_add += 50;
+                            };
+                            case(_) {
+                                tokens_to_add += 10;
+                            };
                         };
-                        case(_) {
-                            tokens_to_add += 10;
-                        };
-                    }
-                    
+                    };
+                    canClaimEntries[Nat32.toNat(x)] := now;
                 };
+                let to_balance = _balanceOf(msg.caller);
+                totalSupply_ += tokens_to_add;
+                balances.put(msg.caller, to_balance + tokens_to_add);
+                ignore addRecord(
+                    msg.caller, "mint",
+                    [
+                        ("to", #Principal(msg.caller)),
+                        ("value", #U64(u64(tokens_to_add))),
+                        ("fee", #U64(u64(0)))
+                    ]
+                );
+                txcounter += 1;
                 return tokens_to_add;
                 };
 
