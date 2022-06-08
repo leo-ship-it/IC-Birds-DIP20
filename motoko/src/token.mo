@@ -252,6 +252,10 @@ shared(msg) actor class Token(
     //     return Time.now();
     // };
 
+    public shared(msg) func getNextClaimTime() : async Int {
+
+    };
+
     public shared(msg) func getTokens(): async Int {
         let caller = Utils.accountToText(Utils.principalToAccount(msg.caller));
         let nft_canister = actor("4mupc-myaaa-aaaah-qcz2a-cai"): actor {tokens : shared query Types.AccountIdentifier -> async Types.Result_1;};
