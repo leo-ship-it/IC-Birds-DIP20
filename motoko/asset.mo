@@ -12,6 +12,8 @@ actor Asset {
         nbOfChest : Nat;
         laserPotions : Nat;
         angelPotions : Nat;
+        expPotions: Nat;
+        userLevel: Nat;
         laserBirds : [Nat];
         angelBirds : [Nat];
     };
@@ -19,6 +21,7 @@ actor Asset {
     type ChestResult = {
         laserPotion : Bool;
         angelPotion : Bool;
+        expPotion: Nat;
         coins : Nat;
     };
 
@@ -69,14 +72,24 @@ actor Asset {
         };
     };
 
-    // Function left : setName, useLaserPotion, useAngelPotion, 
+    type UsePotionResult = {
+        #Ok;
+        #Err: {
+            #UserNotFoud;
+            #NotEnoughPotion;
+            #LevelMaxReached;
+        };
+    };
+
+    // Function left : useLaserPotion, useAngelPotion, 
 
     private var chest_price : Nat = 1_000;
     private var rename_price : Nat = 100;
+    private var levelUp : [Nat] = [1, 2, 4, 6, 8, 10];
     private var tokenCanisterId : Text = "ryjl3-tyaaa-aaaaa-aaaba-cai";
     private var owner : Principal = Principal.fromText("7ly2x-6aagz-er6jy-ae42u-soscs-sij57-q25r2-gn5f3-nibrt-cid53-fqe");
     private var inventories = HashMap.HashMap<Principal, Inventory>(1, Principal.equal, Principal.hash);
-    private stable var inventoriesEntries : [(Principal, Text, Nat, Nat, Nat, [Nat], [Nat])] = [];
+    private stable var inventoriesEntries : [(Principal, Text, Nat, Nat, Nat, Nat, Nat, [Nat], [Nat])] = [];
 
     public shared(msg) func setTokenCanisterId(newID: Text) {
         assert(msg.caller == owner);
@@ -84,8 +97,13 @@ actor Asset {
     };
 
     public shared(msg) func setOwner(p : Principal) {
-        assert(msg.caller == p);
+        assert(msg.caller == owner);
         owner := p;
+    };
+
+    public shared(msg) func setChestPrice(newChestPrice: Nat) {
+        assert(msg.caller == owner);
+        chest_price := newChestPrice;
     };
 
     public shared(msg) func setNewName(newName : Text) : async (BuyChestReceipt) {
@@ -108,6 +126,8 @@ actor Asset {
                             nbOfChest = u.nbOfChest;
                             laserPotions = u.laserPotions;
                             angelPotions = u.angelPotions;
+                            expPotions = u.expPotions;
+                            userLevel = u.userLevel;
                             laserBirds = u.laserBirds;
                             angelBirds = u.angelBirds;
                         };
@@ -125,6 +145,8 @@ actor Asset {
                     nbOfChest = 0;
                     laserPotions = 0;
                     angelPotions = 0;
+                    expPotions = 0;
+                    userLevel = 0;
                     laserBirds = [];
                     angelBirds = [];
                 };
@@ -147,11 +169,96 @@ actor Asset {
                     nbOfChest = 0;
                     laserPotions = 0;
                     angelPotions = 0;
+                    expPotions = 0;
+                    userLevel = 0;
                     laserBirds = [];
                     angelBirds = [];
                 };
                 inventories.put(msg.caller, newUserData);
                 return newUserData;
+            };
+        };
+    };
+
+    public shared(msg) func useLaserPotion(targetBird : Nat) : async (UsePotionResult) {
+        var user = inventories.get(msg.caller);
+        switch(user) {
+            case(?u) {
+                if(u.laserPotions > 0) {
+                    let newUserData : Inventory = {
+                        name = u.name;
+                        nbOfChest = u.nbOfChest;
+                        laserPotions = u.laserPotions - 1;
+                        angelPotions = u.angelPotions;
+                        expPotions = u.expPotions;
+                        userLevel = u.userLevel;
+                        laserBirds = Array.append(u.laserBirds, [targetBird]);
+                        angelBirds = u.angelBirds;
+                    };
+                    inventories.put(msg.caller, newUserData);
+                    return #Ok;
+                };
+                return #Err(#NotEnoughPotion);
+            };
+            case(_) {
+                return #Err(#UserNotFoud);
+            };
+        };
+    };
+
+
+    public shared(msg) func useAngelPotion(targetBird : Nat) : async (UsePotionResult) {
+        var user = inventories.get(msg.caller);
+        switch(user) {
+            case(?u) {
+                if(u.angelPotions > 0) {
+                    let newUserData : Inventory = {
+                        name = u.name;
+                        nbOfChest = u.nbOfChest;
+                        laserPotions = u.laserPotions;
+                        angelPotions = u.angelPotions - 1;
+                        expPotions = u.expPotions;
+                        userLevel = u.userLevel;
+                        laserBirds = u.laserBirds;
+                        angelBirds = Array.append(u.angelBirds, [targetBird]);
+                    };
+                    inventories.put(msg.caller, newUserData);
+                    return #Ok;
+                };
+                return #Err(#NotEnoughPotion);
+            };
+            case(_) {
+                return #Err(#UserNotFoud);
+            };
+        };
+    };
+
+    public shared(msg) func useExpPotion() : async (UsePotionResult) {
+        var user = inventories.get(msg.caller);
+        switch(user) {
+            case(?u) {
+                if(u.userLevel == 6) {
+                    return #Err(#LevelMaxReached);
+                };
+                let requiredPotion = levelUp[u.userLevel];
+                if(u.expPotions >= requiredPotion) {
+                    let newUserData : Inventory = {
+                        name = u.name;
+                        nbOfChest = u.nbOfChest;
+                        laserPotions = u.laserPotions;
+                        angelPotions = u.angelPotions;
+                        expPotions = u.expPotions - requiredPotion;
+                        userLevel = u.userLevel + 1;
+                        laserBirds = u.laserBirds;
+                        angelBirds = u.angelBirds;
+                    };
+                    inventories.put(msg.caller, newUserData);
+                    return #Ok;
+                };
+                return #Err(#NotEnoughPotion);
+            };
+            case(_) {
+                return #Err(#UserNotFoud);
             };
         };
     };
@@ -171,14 +278,21 @@ actor Asset {
                     case(?vals) {
                         var angelResult = false;
                         var laserResult = false;
+                        var newExpPotionsCount = 1;
                         if(vals < 13) {
                             angelResult := true;
+                            newExpPotionsCount := newExpPotionsCount+1;
                         } else if (vals > 242) {
                             laserResult := true;
+                            newExpPotionsCount := newExpPotionsCount+1;
+                        };
+                        if(vals < 125) {
+                            newExpPotionsCount := newExpPotionsCount+1;
                         };
                         let res : ChestResult = {
                             laserPotion = laserResult;
                             angelPotion = angelResult;
+                            expPotion = newExpPotionsCount;
                             coins = vals;
                         };
                         var newLaserPotionsCount = u.laserPotions;
@@ -194,10 +308,18 @@ actor Asset {
                             nbOfChest = u.nbOfChest - 1;
                             laserPotions = newLaserPotionsCount;
                             angelPotions = newAngelPotionsCount;
+                            expPotions = u.expPotions + newExpPotionsCount;
+                            userLevel = u.userLevel;
                             laserBirds = u.laserBirds;
                             angelBirds = u.angelBirds;
                         };
                         inventories.put(msg.caller, newUserData);
+                        let tocallcanister = actor(tokenCanisterId): actor {
+                            transfer : shared (to: Principal, value: Nat) -> async (TxReceipt);
+                            approve : shared (spender: Principal, value: Nat) -> async (TxReceipt);
+                            transferFrom: shared (from: Principal, to: Principal, value: Nat) -> async (TxReceipt);
+                        };
+                        ignore tocallcanister.transfer(msg.caller, vals);
                         return #Ok(res);
                     };
                     case(_) {
@@ -212,6 +334,8 @@ actor Asset {
                     nbOfChest = 0;
                     laserPotions = 0;
                     angelPotions = 0;
+                    expPotions = 0;
+                    userLevel = 0;
                     laserBirds = [];
                     angelBirds = [];
                 };
@@ -241,6 +365,8 @@ actor Asset {
                             nbOfChest = u.nbOfChest + 1;
                             laserPotions = u.laserPotions;
                             angelPotions = u.angelPotions;
+                            expPotions = u.expPotions;
+                            userLevel = u.userLevel;
                             laserBirds = u.laserBirds;
                             angelBirds = u.angelBirds;
                         };
@@ -258,6 +384,8 @@ actor Asset {
                     nbOfChest = 0;
                     laserPotions = 0;
                     angelPotions = 0;
+                    expPotions = 0;
+                    userLevel = 0;
                     laserBirds = [];
                     angelBirds = [];
                 };
@@ -272,10 +400,10 @@ actor Asset {
     */
     system func preupgrade() {
         var size : Nat = inventories.size();
-        var temp : [var (Principal, Text, Nat, Nat, Nat, [Nat], [Nat])] = Array.init<(Principal, Text, Nat, Nat, Nat, [Nat], [Nat])>(size, (owner, "", 0, 0, 0, [], []));
+        var temp : [var (Principal, Text, Nat, Nat, Nat, Nat, Nat, [Nat], [Nat])] = Array.init<(Principal, Text, Nat, Nat, Nat, Nat, Nat, [Nat], [Nat])>(size, (owner, "", 0, 0, 0,0,0, [], []));
         size := 0;
         for ((k, v) in inventories.entries()) {
-            let element : (Principal, Text, Nat, Nat, Nat, [Nat], [Nat]) = (k, v.name, v.nbOfChest, v.laserPotions, v.angelPotions, v.laserBirds, v.angelBirds);
+            let element : (Principal, Text, Nat, Nat, Nat, Nat, Nat, [Nat], [Nat]) = (k, v.name, v.nbOfChest, v.laserPotions, v.angelPotions, v.expPotions, v.userLevel, v.laserBirds, v.angelBirds);
             temp[size] := element;
             size += 1;
         };
@@ -283,14 +411,16 @@ actor Asset {
     };
 
     system func postupgrade() {
-        for ((a,b,c,d,e,f,g) in inventoriesEntries.vals()) {
+        for ((a,b,c,d,e,f,g,h,i) in inventoriesEntries.vals()) {
             let allowed_temp : Inventory = {
                 name = b;
                 nbOfChest = c;
                 laserPotions = d;
                 angelPotions = e;
-                laserBirds = f;
-                angelBirds = g;
+                expPotions = f;
+                userLevel = g;
+                laserBirds = h;
+                angelBirds = i;
             };
             inventories.put(a, allowed_temp);
         };
